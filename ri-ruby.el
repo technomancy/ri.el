@@ -49,6 +49,8 @@
 ;;  * In FSF Emacs the colors don't show up on the help screen.  Perhaps
 ;;    FSF Emacs doesn't have extends in strings?
 ;;
+;;  * It is reported that the ruby-script doesn't work with XEmacs under
+;;    MS-Windows.  This is probably a bug in processes in XEmacs.  
 
 (require 'ansi-color)
 
