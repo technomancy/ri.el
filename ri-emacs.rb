@@ -119,20 +119,35 @@ class RiEmacs
          else
             return "nil"
          end
+      # type == try
       elsif list.size == 1 and
             list[0].split(/(::)|#|\./) == keyw.split(/(::)|#|\./)
          return "t"
       end
 
       first = list.shift;
+      if first =~ /(.*)((?:::)|(?:#))(.*)/
+         other = $1 + ($2 == "::" ? "#" : "::") + $3
+      end
+                        
       len = first.size
+      match_both = false
       list.each do |w|
          while w[0, len] != first[0, len]
+            if other and w[0, len] == other[0, len]
+               match_both = true
+               break
+            end
             len -= 1
          end
       end
 
-      return first[0, len].inspect
+      if match_both
+         return other.sub(/(.*)((?:::)|(?:#))/) {
+            $1 + "." }[0, len].inspect
+      else
+         return first[0, len].inspect
+      end
    end
 
    def display_info(keyw)
@@ -162,7 +177,7 @@ class RiEmacs
       @methods = @methods.find_all { |m| m.name == @desc.method_name }
 
       return "(" + @methods.map do |m|
-         "(" + m.full_name.gsub(/(.*)(#|(::)).*/,
+         "(" + m.full_name.sub(/(.*)(#|(::)).*/,
                                 '\1').inspect + ")"
       end.uniq.join(" ") + ")"
    end
