@@ -162,22 +162,23 @@
   (let* ((curr (current-word))
 	 (match (ri-ruby-process-get-expr "LAMBDA" curr))
 	 (default (if match curr nil))
-	 (prompt (concat "method or classname"
+	 (prompt (concat "method- or classname"
 			 (if default (concat " (default " default ")") "")
-			 ": ")))
-    (list (completing-read prompt 'ri-ruby-complete-method
-			   nil t "" 'ri-ruby-history default))))
-
-(defun ri (keyw)
-  (interactive (ri-ruby-read-keyw))
-  (let* ((classes (ri-ruby-process-get-expr "CLASS_LIST" keyw))
+			 ": "))
+	 (keyw (completing-read prompt 'ri-ruby-complete-method
+				nil t "" 'ri-ruby-history default))
+	 (classes (ri-ruby-process-get-expr "CLASS_LIST" keyw))
 	 (class (cond ((null classes) nil)
 		      ((null (cdr classes)) (caar classes))
-		      (t (completing-read "class name: " classes
-					  nil t))))
-	 (method (if class (concat class "#" keyw)
-		     keyw))
-	 (info (ri-ruby-process-get-lines "DISPLAY_INFO" method)))
+		      (t (completing-read (concat prompt keyw
+						  " classname: ")
+					  classes nil t)))))
+    (list keyw class)))
+
+(defun ri (keyw &optional class)
+  (interactive (ri-ruby-read-keyw))
+  (let* ((method (if class (concat class "#" keyw) keyw))
+	(info (ri-ruby-process-get-lines "DISPLAY_INFO" method)))
     (cond (info (ri-ruby-show-info method info))
 	  ((null class))
 	  (t (setq method (concat class "::" keyw))
