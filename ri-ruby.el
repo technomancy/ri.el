@@ -68,7 +68,8 @@
 	       (start-process "ri-ruby-process"
 			      nil
 			      "ruby" ri-ruby-script))
-	 (process-kill-without-query ri-ruby-process)))
+	 (process-kill-without-query ri-ruby-process) ;kill when ending emacs
+	 (ri-ruby-process-check-ready)))
   ri-ruby-process)
 
 (defun ri-ruby-process-filter-expr (proc str)
@@ -84,27 +85,47 @@
     (goto-char (point-max))
     (insert-string (ansi-color-apply str))))
 
+(defun ri-ruby-process-check-ready ()
+  (let ((ri-ruby-process-buffer (generate-new-buffer  " ri-ruby-output")))
+    (unwind-protect
+	(save-excursion
+	  (set-buffer ri-ruby-process-buffer)
+	  (set-process-filter ri-ruby-process 'ri-ruby-process-filter-expr)
+	  (ri-ruby-check-process ri-ruby-process-buffer)
+	  (accept-process-output ri-ruby-process 5)
+	  (goto-char (point-min))
+	  (cond ((not (looking-at "READY.*\n"))
+		 (delete-process ri-ruby-process)
+		 (error 'io-error "couldn't start ruby script"))))
+      (set-process-filter ri-ruby-process t)
+      (kill-buffer ri-ruby-process-buffer))))
+
+(defun ri-ruby-check-process (buffer)
+  (or (equal (process-status ri-ruby-process) 'run)
+      (let ((output (buffer-substring (point-min buffer)
+				      (point-max buffer)
+				      buffer)))
+	(error 'io-error "Process is not running.\n" output))))
+
 (defun ri-ruby-process-get-expr (cmd param)
   (ri-ruby-get-process)
-  (if (equal param "") nil
-    (let ((ri-ruby-process-buffer (generate-new-buffer  "ri-ruby-output"))
+    (let ((ri-ruby-process-buffer (generate-new-buffer  " ri-ruby-output"))
 	  (command (concat cmd " " param "\n")))
       (unwind-protect
 	  (save-excursion
 	    (set-buffer ri-ruby-process-buffer)
 	    (set-process-filter ri-ruby-process 'ri-ruby-process-filter-expr)
-	    (if (not (equal (process-status ri-ruby-process) 'run))
-		(error "process not running"))
 	    (process-send-string ri-ruby-process command)
+	    (ri-ruby-check-process ri-ruby-process-buffer)
 	    (while (progn (goto-char (point-min))
 			  (not (looking-at ".*\n"))) ;we didn't read a whole line
+	      (ri-ruby-check-process ri-ruby-process-buffer)
 	      (accept-process-output ri-ruby-process))
 	    (goto-char (point-min))
 	    (read (buffer-substring (point)
 				    (point-at-eol))))
 	(set-process-filter ri-ruby-process t)
-	(kill-buffer ri-ruby-process-buffer)))))
-
+	(kill-buffer ri-ruby-process-buffer))))
 
 (defun ri-ruby-process-get-lines (cmd param)
   (ri-ruby-get-process)
@@ -116,9 +137,11 @@
 	    (set-buffer ri-ruby-process-buffer)
 	    (set-process-filter ri-ruby-process 'ri-ruby-process-filter-lines)
 	    (process-send-string ri-ruby-process command)
+	    (ri-ruby-check-process ri-ruby-process-buffer)
 	    (while (progn (goto-char (point-max))
 			  (goto-char (point-at-bol 0))
 			  (not (looking-at "RI_EMACS_END_OF_INFO$")))
+	      (ri-ruby-check-process ri-ruby-process-buffer)
 	      (accept-process-output ri-ruby-process))
 	    (if (bobp) nil
 	      (backward-char)

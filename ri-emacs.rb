@@ -62,9 +62,21 @@ class RiEmacs
       end
 
       if @desc.method_name.nil?
-         @namespaces = @namespaces.find_all{ |n| n.name.index(class_name).zero? }
-         return false if @namespaces.empty?
-         @methods = nil
+         if [?., ?:, ?#].include? keyw[-1]
+            @namespaces = container
+            is_class_method = case keyw[-1]
+                              when ?.: nil
+                              when ?:: true
+                              when ?#: false
+                              end
+            @methods = @ri_reader.find_methods("", is_class_method,
+                                               container)
+            return false if @methods.empty?
+         else
+            @namespaces = @namespaces.find_all{ |n| n.name.index(class_name).zero? }
+            return false if @namespaces.empty?
+            @methods = nil
+         end
       else
          return false if container.empty?
          @namespaces = container
@@ -80,9 +92,11 @@ class RiEmacs
    end
 
    def completion_list(keyw)
+      return @ri_reader.full_class_names if keyw == ""
+      
       return nil unless lookup_keyw(keyw)
 
-      if @desc.method_name.nil?
+      if @methods.nil?
          return @namespaces.map{ |n| n.full_name }
       elsif @desc.class_names.empty?
          return @methods.map { |m| m.name }.uniq
@@ -110,7 +124,7 @@ class RiEmacs
          return "t"
       end
 
-      first = list[0];
+      first = list.shift;
       len = first.size
       list.each do |w|
          while w[0, len] != first[0, len]
@@ -168,7 +182,7 @@ class Command
       
    def read_next
       line = STDIN.gets
-      cmd, param = /(\w+)\s+(.*)$/.match(line)[1..2]
+      cmd, param = /(\w+)(.*)$/.match(line)[1..2]
       method = Command2Method[cmd]
       fail "unrecognised command: #{cmd}" if method.nil?
       send(method, param.strip)
@@ -194,8 +208,25 @@ class Command
       @ri.display_info(keyw)
       STDOUT.puts "RI_EMACS_END_OF_INFO"
    end
+
+   def test
+      [:try, :all, :lambda].each do |t|
+         @ri.complete("each", t) or
+            fail "@ri.complete(\"each\", #{t.inspect}) returned nil"
+      end
+      @ri.display_info("Array#each") or
+         raise 'display_info("Array#each") returned false'
+   end
 end
 
-paths = ARGV[0]
-cmd = Command.new(RiEmacs.new(paths))
-loop { cmd.read_next }
+arg = ARGV[0]
+
+if arg == "--test"
+   cmd = Command.new(RiEmacs.new(nil))
+   cmd.test
+   puts "Test succeeded"
+else
+   cmd = Command.new(RiEmacs.new(arg))
+   puts 'READY'
+   loop { cmd.read_next }
+end
