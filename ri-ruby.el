@@ -1,0 +1,177 @@
+;;;; ri-ruby.el emacs wrapper around ri
+;;
+;; Author: Kristof Bastiaensen <kristof@vleeuwen.org>
+;;
+;;
+;;    Copyright (C) 2004 Kristof Bastiaensen
+;;
+;;    This program is free software; you can redistribute it and/or modify
+;;    it under the terms of the GNU General Public License as published by
+;;    the Free Software Foundation; either version 2 of the License, or
+;;    (at your option) any later version.
+;;
+;;    This program is distributed in the hope that it will be useful,
+;;    but WITHOUT ANY WARRANTY; without even the implied warranty of
+;;    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;;    GNU General Public License for more details.
+;;
+;;    You should have received a copy of the GNU General Public License
+;;    along with this program; if not, write to the Free Software
+;;    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+;;----------------------------------------------------------------------
+;;
+;;
+;;  Installing:
+;;  ===========
+;;
+;;  add the following to your init.el, replacing the filenames with
+;;  their correct locations:
+;;
+;;  (setq ri-ruby-script "/home/kristof/.xemacs/ri-emacs.rb")
+;;  (autoload 'ri "/home/kristof/.xemacs/ri-ruby.el" nil t)
+;;
+;;  You may want to bind the ri command to a key.
+;;  For example to bind it to F1 in ruby-mode:
+;;
+;;  (add-hook 'ruby-mode-hook (lambda () (local-set-key 'f1 'ri)))
+;;
+;;  Usage:
+;;  ======
+;;  m-x ri
+;;  
+;;  Bugs:
+;;  ====
+;;
+;;  * The first time you give the ri command on xemacs, it may give
+;;    strange behaviour in XEmacs.  This is probably due to a
+;;    bug in the way XEmacs handles processes under linux.
+;;
+;;  * In FSF Emacs the colors don't show up on the help screen.  Perhaps
+;;    FSF Emacs doesn't have extends in strings?
+;;
+
+(require 'ansi-color)
+
+(defvar ri-ruby-script "/home/kristof/.xemacs/ri-emacs.rb"
+  "the ruby script to communicate with")
+
+(defvar ri-ruby-process nil
+  "The current ri process where emacs is interacting with")
+
+(defvar ri-ruby-history nil
+  "The history for ri")
+
+(defun ri-ruby-get-process ()
+  (cond ((or (null ri-ruby-process)
+	     (not (equal (process-status ri-ruby-process) 'run)))
+	 (setq ri-ruby-process
+	       (start-process "ri-ruby-process"
+			      nil
+			      "ruby" ri-ruby-script))
+	 (process-kill-without-query ri-ruby-process)))
+  ri-ruby-process)
+
+(defun ri-ruby-process-filter-expr (proc str)
+  (let ((ansi-color-context nil))
+    (save-excursion
+      (set-buffer ri-ruby-process-buffer)
+      (goto-char (point-max))
+      (insert-string (ansi-color-filter-apply str)))))
+
+(defun ri-ruby-process-filter-lines (proc str)
+  (save-excursion
+    (set-buffer ri-ruby-process-buffer)
+    (goto-char (point-max))
+    (insert-string (ansi-color-apply str))))
+
+(defun ri-ruby-process-get-expr (cmd param)
+  (ri-ruby-get-process)
+  (if (equal param "") nil
+    (let ((ri-ruby-process-buffer (generate-new-buffer  "ri-ruby-output"))
+	  (command (concat cmd " " param "\n")))
+      (unwind-protect
+	  (save-excursion
+	    (set-buffer ri-ruby-process-buffer)
+	    (set-process-filter ri-ruby-process 'ri-ruby-process-filter-expr)
+	    (if (not (equal (process-status ri-ruby-process) 'run))
+		(error "process not running"))
+	    (process-send-string ri-ruby-process command)
+	    (while (progn (goto-char (point-min))
+			  (not (looking-at ".*\n"))) ;we didn't read a whole line
+	      (accept-process-output ri-ruby-process))
+	    (goto-char (point-min))
+	    (read (buffer-substring (point)
+				    (point-at-eol))))
+	(set-process-filter ri-ruby-process t)
+	(kill-buffer ri-ruby-process-buffer)))))
+
+
+(defun ri-ruby-process-get-lines (cmd param)
+  (ri-ruby-get-process)
+  (if (equal param "") nil
+    (let ((ri-ruby-process-buffer (generate-new-buffer " ri-ruby-output"))
+	  (command (concat cmd " " param "\n")))
+      (unwind-protect
+	  (save-excursion
+	    (set-buffer ri-ruby-process-buffer)
+	    (set-process-filter ri-ruby-process 'ri-ruby-process-filter-lines)
+	    (process-send-string ri-ruby-process command)
+	    (while (progn (goto-char (point-max))
+			  (goto-char (point-at-bol 0))
+			  (not (looking-at "RI_EMACS_END_OF_INFO$")))
+	      (accept-process-output ri-ruby-process))
+	    (if (bobp) nil
+	      (backward-char)
+	      (buffer-substring (point-min) (point))))
+	(set-process-filter ri-ruby-process t)
+	(kill-buffer ri-ruby-process-buffer)))))
+
+(defun ri-ruby-complete-method (str pred type)
+  (let* ((cmd (cdr (assoc type '((nil . "TRY_COMPLETION")
+				 (t   . "COMPLETE_ALL")
+				 (lambda . "LAMBDA")))))
+	 (result (ri-ruby-process-get-expr cmd str)))
+    (if (and pred (listp result))
+	(setq result (mapcar pred result)))
+    result))
+					       
+(defun ri-ruby-read-keyw ()
+  (let* ((curr (current-word))
+	 (match (ri-ruby-process-get-expr "LAMBDA" curr))
+	 (default (if match curr nil))
+	 (prompt (concat "method or classname"
+			 (if default (concat " (default " default ")") "")
+			 ": ")))
+    (list (completing-read prompt 'ri-ruby-complete-method
+			   nil t "" 'ri-ruby-history default))))
+
+(defun ri (keyw)
+  (interactive (ri-ruby-read-keyw))
+  (let* ((classes (ri-ruby-process-get-expr "CLASS_LIST" keyw))
+	 (class (cond ((null classes) nil)
+		      ((null (cdr classes)) (caar classes))
+		      (t (completing-read "class name: " classes
+					  nil t))))
+	 (method (if class (concat class "#" keyw)
+		     keyw))
+	 (info (ri-ruby-process-get-lines "DISPLAY_INFO" method)))
+    (cond (info (ri-ruby-show-info method info))
+	  ((null class))
+	  (t (setq method (concat class "::" keyw))
+	     (setq info (ri-ruby-process-get-lines "DISPLAY_INFO" method))
+	     (if info (ri-ruby-show-info method info))))))
+
+(cond ((fboundp 'with-displaying-help-buffer) ; for XEmacs
+       (defun ri-ruby-show-info (method info) 
+	 (with-displaying-help-buffer
+	  (lambda () (princ info))
+	  (format "ri `%s'" method))))
+      ((fboundp 'with-output-to-temp-buffer) ; for Emacs
+       (defun ri-ruby-show-info (method info)
+	 (with-output-to-temp-buffer
+	     (format "ri `%s'" method)
+	   (princ info))))
+      (t
+       (defun ri-ruby-show-info (method info)
+	 (error "cannot display help for your Emacs version"))))
+		
