@@ -3,7 +3,7 @@
 ;; Author: Kristof Bastiaensen <kristof@vleeuwen.org>
 ;;
 ;;
-;;    Copyright (C) 2004 Kristof Bastiaensen
+;;    Copyright (C) 2004 - 2006 Kristof Bastiaensen
 ;;
 ;;    This program is free software; you can redistribute it and/or modify
 ;;    it under the terms of the GNU General Public License as published by
@@ -46,11 +46,14 @@
 ;;    strange behaviour in XEmacs.  This is probably due to a
 ;;    bug in the way XEmacs handles processes under linux.
 ;;
-;;  * In FSF Emacs the colors don't show up on the help screen.  Perhaps
-;;    FSF Emacs doesn't have extends in strings?
-;;
 ;;  * It is reported that the ruby-script doesn't work with XEmacs under
 ;;    MS-Windows.  This is probably a bug in processes in XEmacs.  
+;;
+;;  Contributors:
+;;  =============
+;;
+;;  rubykitch (http://www.rubyist.net/~rubikitch/):
+;;    fixed highlighting under Emacs
 
 (require 'ansi-color)
 
@@ -87,6 +90,7 @@
     (goto-char (point-max))
     (insert-string (ansi-color-apply str))))
 
+(defvar ri-startup-timeout 15)
 (defun ri-ruby-process-check-ready ()
   (let ((ri-ruby-process-buffer (generate-new-buffer  " ri-ruby-output")))
     (unwind-protect
@@ -94,7 +98,7 @@
 	  (set-buffer ri-ruby-process-buffer)
 	  (set-process-filter ri-ruby-process 'ri-ruby-process-filter-expr)
 	  (ri-ruby-check-process ri-ruby-process-buffer)
-	  (accept-process-output ri-ruby-process 5)
+	  (accept-process-output ri-ruby-process ri-startup-timeout)
 	  (goto-char (point-min))
 	  (cond ((not (looking-at "READY.*\n"))
 		 (delete-process ri-ruby-process)
@@ -192,12 +196,13 @@
 	 (with-displaying-help-buffer
 	  (lambda () (princ info))
 	  (format "ri `%s'" method))))
-      ((fboundp 'with-output-to-temp-buffer) ; for Emacs
+      (t ; for Emacs
        (defun ri-ruby-show-info (method info)
-	 (with-output-to-temp-buffer
-	     (format "ri `%s'" method)
-	   (princ info))))
-      (t
-       (defun ri-ruby-show-info (method info)
-	 (error "cannot display help for your Emacs version"))))
-		
+	 (let ((b (get-buffer-create (format "ri `%s'" method))))
+           (display-buffer b)
+           (with-current-buffer b
+             (buffer-disable-undo)
+             (erase-buffer)
+             (insert info)
+             (goto-char 1)))
+         info)))
