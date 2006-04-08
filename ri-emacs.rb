@@ -3,7 +3,7 @@
 # Author: Kristof Bastiaensen <kristof@vleeuwen.org>
 #
 #
-#    Copyright (C) 2004 Kristof Bastiaensen
+#    Copyright (C) 2004,2006 Kristof Bastiaensen
 #
 #    This program is free software; you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -29,6 +29,19 @@ require 'rdoc/ri/ri_util'
 require 'rdoc/ri/ri_reader'
 require 'rdoc/ri/ri_formatter'
 require 'rdoc/ri/ri_display'
+
+class DefaultDisplay
+  def full_params(method)
+    method.params.split(/\n/).each do |p|
+      p.sub!(/^#{method.name}\(/o,'(')
+      unless p =~ /\b\.\b/
+        p = method.full_name + p
+      end
+      @formatter.wrap(p) 
+      @formatter.break_to_newline
+    end
+  end
+end
 
 class RiEmacs
    Options = Struct.new(:formatter, :use_stdout, :width)
@@ -168,9 +181,23 @@ class RiEmacs
       return true
    end
 
+   def display_args(keyw)
+      return nil unless lookup_keyw(keyw)
+      return nil unless @desc.class_names.empty?
+
+      @methods = @methods.find_all { |m| m.name == @desc.method_name }
+      return false if @methods.empty?
+      @methods.each do |m|
+        meth = @ri_reader.get_method(m)
+        @display.full_params(meth)
+      end
+
+      return true
+   end
+
    # return a list of classes for the method keyw
    # return nil if keyw has already a class
-   def class_list(keyw)
+   def class_list(keyw, rep='\1')
       return nil unless lookup_keyw(keyw)
       return nil unless @desc.class_names.empty?
 
@@ -178,8 +205,15 @@ class RiEmacs
 
       return "(" + @methods.map do |m|
          "(" + m.full_name.sub(/(.*)(#|(::)).*/,
-                                '\1').inspect + ")"
+                                rep).inspect + ")"
       end.uniq.join(" ") + ")"
+   end
+
+   # flag means (#|::) 
+   # return a list of classes and flag for the method keyw
+   # return nil if keyw has already a class
+   def class_list_with_flag(keyw)
+     class_list(keyw, '\1\2')
    end
 end
 
@@ -193,6 +227,8 @@ class Command
       "COMPLETE_ALL" => :complete_all,
       "LAMBDA" => :lambda,
       "CLASS_LIST" => :class_list,
+      "CLASS_LIST_WITH_FLAG" => :class_list_with_flag,
+      "DISPLAY_ARGS" => :display_args,
       "DISPLAY_INFO" => :display_info}
       
    def read_next
@@ -217,6 +253,15 @@ class Command
 
    def class_list(keyw)
       STDOUT.puts @ri.class_list(keyw)
+   end
+
+   def class_list_with_flag(keyw)
+      STDOUT.puts @ri.class_list_with_flag(keyw)
+   end
+
+   def display_args(keyw)
+      @ri.display_args(keyw)
+      STDOUT.puts "RI_EMACS_END_OF_INFO"
    end
 
    def display_info(keyw)

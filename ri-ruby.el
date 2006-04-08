@@ -3,7 +3,7 @@
 ;; Author: Kristof Bastiaensen <kristof@vleeuwen.org>
 ;;
 ;;
-;;    Copyright (C) 2004 - 2006 Kristof Bastiaensen
+;;    Copyright (C) 2004,2006 Kristof Bastiaensen
 ;;
 ;;    This program is free software; you can redistribute it and/or modify
 ;;    it under the terms of the GNU General Public License as published by
@@ -32,12 +32,20 @@
 ;;
 ;;  You may want to bind the ri command to a key.
 ;;  For example to bind it to F1 in ruby-mode:
+;;  Method/class completion is also available.
 ;;
-;;  (add-hook 'ruby-mode-hook (lambda () (local-set-key 'f1 'ri)))
+;;   (add-hook 'ruby-mode-hook (lambda ()
+;;                               (local-set-key 'f1 'ri)
+;;                               (local-set-key "\M-\C-i" 'ri-ruby-complete-symbol)
+;;                               (local-set-key 'f4 'ri-ruby-show-args)
+;;                               ))
+;;
 ;;
 ;;  Usage:
 ;;  ======
-;;  m-x ri
+;;  M-x ri
+;;
+;;  M-Tab for completion
 ;;  
 ;;  Bugs:
 ;;  ====
@@ -52,10 +60,13 @@
 ;;  Contributors:
 ;;  =============
 ;;
-;;  rubykitch (http://www.rubyist.net/~rubikitch/):
+;;  rubikitch (http://www.rubyist.net/~rubikitch/):
 ;;    fixed highlighting under Emacs
 
 (require 'ansi-color)
+
+(defvar ri-ruby-program "ruby"
+  "The ruby program name.")
 
 (defvar ri-ruby-script "/home/kristof/.xemacs/ri-emacs.rb"
   "the ruby script to communicate with")
@@ -66,13 +77,15 @@
 (defvar ri-ruby-history nil
   "The history for ri")
 
+(defvar ri-ruby-process-buffer nil)
+
 (defun ri-ruby-get-process ()
   (cond ((or (null ri-ruby-process)
 	     (not (equal (process-status ri-ruby-process) 'run)))
 	 (setq ri-ruby-process
 	       (start-process "ri-ruby-process"
 			      nil
-			      "ruby" ri-ruby-script))
+			      ri-ruby-program ri-ruby-script))
 	 (process-kill-without-query ri-ruby-process) ;kill when ending emacs
 	 (ri-ruby-process-check-ready)))
   ri-ruby-process)
@@ -90,7 +103,7 @@
     (goto-char (point-max))
     (insert-string (ansi-color-apply str))))
 
-(defvar ri-startup-timeout 15)
+(defvar ri-startup-timeout 60)
 (defun ri-ruby-process-check-ready ()
   (let ((ri-ruby-process-buffer (generate-new-buffer  " ri-ruby-output")))
     (unwind-protect
@@ -108,9 +121,9 @@
 
 (defun ri-ruby-check-process (buffer)
   (or (equal (process-status ri-ruby-process) 'run)
-      (let ((output (buffer-substring (point-min buffer)
-				      (point-max buffer)
-				      buffer)))
+      (let ((output (with-current-buffer buffer
+                      (buffer-substring (point-min)
+                                        (point-max)))))
 	(error 'io-error "Process is not running.\n" output))))
 
 (defun ri-ruby-process-get-expr (cmd param)
@@ -181,7 +194,61 @@
 					  classes nil t)))))
     (list keyw class)))
 
+(defun ri-ruby-method-with-class (meth classes)
+  (concat meth " [" (mapconcat 'car classes ", ") "]"))
+
+(defun ri-ruby-complete-symbol ()
+  "Completion on ruby-mode."
+  (interactive)
+  (let* ((curr (current-word))
+         (keyw curr)
+ 	 (classes (ri-ruby-process-get-expr "CLASS_LIST_WITH_FLAG" keyw))
+         (completion (try-completion curr 'ri-ruby-complete-method nil)))
+    (cond ((eq completion t)
+           (message "%s" (ri-ruby-method-with-class curr classes))
+           )
+	  ((null completion)
+	   (message "Can't find completion for \"%s\"" curr)
+	   (ding))
+	  ((not (string= curr completion))
+	   (delete-region (save-excursion (search-backward curr) (point))
+                          (point))
+	   (insert completion)
+           (setq classes (ri-ruby-process-get-expr "CLASS_LIST_WITH_FLAG" completion))
+           (message "%s" (ri-ruby-method-with-class completion classes))
+           )
+	  (t
+	   (message "Making completion list...")
+	   (with-output-to-temp-buffer "*Completions*"
+ 	     (display-completion-list
+              (all-completions curr 'ri-ruby-complete-method)
+             ))
+           (message "%s" (ri-ruby-method-with-class completion classes))))))
+
+(defun test-ri-ruby-complete-symbol ()
+  "Test of ri-ruby-complete-symbol."
+  (interactive)
+  (pop-to-buffer "*ruby completion test*")
+  (ruby-mode)
+  (erase-buffer)
+  (goto-char (point-min))
+  (insert "prin
+object_id
+intern
+printf
+# (kill-process \"ri-ruby-process\")
+"))
+
+(defun ri-ruby-show-args ()
+  (interactive)
+  (let* ((method (current-word))
+         (info (ri-ruby-process-get-lines "DISPLAY_ARGS" method)))
+    (when info
+      (message "%s" info)))
+  )
+
 (defun ri (keyw &optional class)
+  "Execute `ri'."
   (interactive (ri-ruby-read-keyw))
   (let* ((method (if class (concat class "#" keyw) keyw))
 	(info (ri-ruby-process-get-lines "DISPLAY_INFO" method)))
@@ -196,9 +263,9 @@
 	 (with-displaying-help-buffer
 	  (lambda () (princ info))
 	  (format "ri `%s'" method))))
-      (t ; for Emacs
+      (t                                ; for Emacs
        (defun ri-ruby-show-info (method info)
-	 (let ((b (get-buffer-create (format "ri `%s'" method))))
+         (let ((b (get-buffer-create (format "ri `%s'" method))))
            (display-buffer b)
            (with-current-buffer b
              (buffer-disable-undo)
