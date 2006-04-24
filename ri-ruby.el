@@ -184,8 +184,14 @@
 	 (prompt (concat "method- or classname"
 			 (if default (concat " (default " default ")") "")
 			 ": "))
-	 (keyw (completing-read prompt 'ri-ruby-complete-method
+	 (keyw (let ((keymap (copy-keymap minibuffer-local-must-match-map)))
+                 (unwind-protect
+                     (progn
+                       (define-key minibuffer-local-must-match-map "?" nil)
+                       (setq a minibuffer-local-must-match-map)
+                       (completing-read prompt 'ri-ruby-complete-method
 				nil t "" 'ri-ruby-history default))
+                   (setq minibuffer-local-must-match-map keymap))))
 	 (classes (ri-ruby-process-get-expr "CLASS_LIST" keyw))
 	 (class (cond ((null classes) nil)
 		      ((null (cdr classes)) (caar classes))
