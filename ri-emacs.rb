@@ -46,7 +46,7 @@ end
 def ruby_minimum_version?(*version)
    VERSION.split(".").
       map{ |i| i.to_i }.
-      <=>(version) > 0
+      <=>(version) > -1
 end
 
 class RiEmacs
