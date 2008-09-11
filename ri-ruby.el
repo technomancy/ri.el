@@ -62,6 +62,8 @@
 ;;
 ;;  rubikitch (http://www.rubyist.net/~rubikitch/):
 ;;    fixed highlighting under Emacs
+;;  technomancy (http://technomancy.us)
+;;    fixed for Emacs 23 and RDoc 2
 
 (require 'ansi-color)
 
@@ -169,14 +171,15 @@
 	(kill-buffer ri-ruby-process-buffer)))))
 
 (defun ri-ruby-complete-method (str pred type)
-  (let* ((cmd (cdr (assoc type '((nil . "TRY_COMPLETION")
-				 (t   . "COMPLETE_ALL")
-				 (lambda . "LAMBDA")))))
-	 (result (ri-ruby-process-get-expr cmd str)))
-    (if (and pred (listp result))
-	(setq result (mapcar pred result)))
-    result))
-					       
+  (unless (listp type)
+    (let* ((cmd (cdr (assoc type '((nil . "TRY_COMPLETION")
+                                   (t   . "COMPLETE_ALL")
+                                   (lambda . "LAMBDA")))))
+           (result (ri-ruby-process-get-expr cmd str)))
+      (if (and pred (listp result))
+          (setq result (mapcar pred result)))
+      result)))
+
 (defun ri-ruby-read-keyw ()
   (let* ((curr (current-word))
 	 (match (ri-ruby-process-get-expr "LAMBDA" curr))
@@ -245,6 +248,7 @@ printf
     (when info
       (message "%s" info))))
 
+;;;###autoload
 (defun ri (keyw &optional class)
   "Execute `ri'."
   (interactive (ri-ruby-read-keyw))
@@ -256,18 +260,30 @@ printf
 	     (setq info (ri-ruby-process-get-lines "DISPLAY_INFO" method))
 	     (if info (ri-ruby-show-info method info))))))
 
+(defun ri-mode ()
+  "Mode for viewing RI documentation."
+  (kill-all-local-variables)
+  (local-set-key (kbd "q") 'quit-window)
+  (local-set-key (kbd "RET") 'ri-follow)
+  (setq mode-name "RI")
+  (setq major-mode 'ri-mode)
+  (setq buffer-read-only t)
+  (run-hooks 'ri-mode-hook))
+
 (cond ((fboundp 'with-displaying-help-buffer) ; for XEmacs
        (defun ri-ruby-show-info (method info) 
 	 (with-displaying-help-buffer
 	  (lambda () (princ info))
-	  (format "ri `%s'" method))))
+	  (format "ri `%s'" method)
+          (ri-mode))))
       (t                                ; for Emacs
        (defun ri-ruby-show-info (method info)
-         (let ((b (get-buffer-create (format "ri `%s'" method))))
+         (let ((b (get-buffer-create (format "*ri `%s'*" method))))
            (display-buffer b)
            (with-current-buffer b
              (buffer-disable-undo)
              (erase-buffer)
              (insert info)
-             (goto-char 1)))
+             (goto-char 1)
+             (ri-mode)))
          info)))
