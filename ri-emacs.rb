@@ -95,8 +95,7 @@ class RiEmacs
 
     last_space = @ri_reader.top_level_namespace
     class_name = nil
-    container = desc.class_names.inject(last_space) do
-      |container, class_name|
+    container = desc.class_names.inject(last_space) do |container, class_name|
       last_space = @ri_reader.lookup_namespace_in(class_name, container)
       last_space.find_all {|m| m.name == class_name}
     end
@@ -204,7 +203,7 @@ class RiEmacs
       namespaces = namespaces.find_all { |n| n.full_name == desc.full_class_name }
       return false if namespaces.empty?
       klass = @ri_reader.get_class(namespaces[0])
-      @display.display_class_info(klass, @ri_reader)
+      @display.display_class_info(klass)
     end
 
     return true
