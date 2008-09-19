@@ -70,7 +70,7 @@
 (defvar ri-ruby-program "ruby"
   "The ruby program name.")
 
-(defvar ri-ruby-script "/home/kristof/.xemacs/ri-emacs.rb"
+(defvar ri-ruby-script (expand-file-name "~/.emacs.d/ri-emacs.rb")
   "the ruby script to communicate with")
 
 (defvar ri-ruby-process nil
@@ -227,20 +227,6 @@
               (all-completions curr 'ri-ruby-complete-method)))
            (message "%s" (ri-ruby-method-with-class completion classes))))))
 
-(defun test-ri-ruby-complete-symbol ()
-  "Test of ri-ruby-complete-symbol."
-  (interactive)
-  (pop-to-buffer "*ruby completion test*")
-  (ruby-mode)
-  (erase-buffer)
-  (goto-char (point-min))
-  (insert "prin
-object_id
-intern
-printf
-# (kill-process \"ri-ruby-process\")
-"))
-
 (defun ri-ruby-show-args ()
   (interactive)
   (let* ((method (current-word))
@@ -270,20 +256,13 @@ printf
   (setq buffer-read-only t)
   (run-hooks 'ri-mode-hook))
 
-(cond ((fboundp 'with-displaying-help-buffer) ; for XEmacs
-       (defun ri-ruby-show-info (method info) 
-	 (with-displaying-help-buffer
-	  (lambda () (princ info))
-	  (format "ri `%s'" method)
-          (ri-mode))))
-      (t                                ; for Emacs
-       (defun ri-ruby-show-info (method info)
-         (let ((b (get-buffer-create (format "*ri `%s'*" method))))
-           (display-buffer b)
-           (with-current-buffer b
-             (buffer-disable-undo)
-             (erase-buffer)
-             (insert info)
-             (goto-char 1)
-             (ri-mode)))
-         info)))
+(defun ri-ruby-show-info (method info)
+  (let ((b (get-buffer-create (format "*ri `%s'*" method))))
+    (display-buffer b)
+    (with-current-buffer b
+      (buffer-disable-undo)
+      (erase-buffer)
+      (insert info)
+      (goto-char 1)
+      (ri-mode)))
+  info)
