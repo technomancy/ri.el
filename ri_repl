@@ -1,9 +1,13 @@
-## ri-emacs.rb helper script for use with ri-ruby.el
+#!/usr/bin/env ruby
+
+## ri_repl --- helper script for use with ri.el
 #
-# Author: Kristof Bastiaensen <kristof@vleeuwen.org>
+# formerly known as ri-emacs.rb
 #
+# Original Author: Kristof Bastiaensen <kristof@vleeuwen.org>
+# Updated by: Phil Hagelberg <technomancy@gmail.com>
 #
-#    Copyright (C) 2004,2006 Kristof Bastiaensen
+#    Copyright (C) 2004,2006 Kristof Bastiaensen, 2008 Phil Hagelberg
 #
 #    This program is free software; you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -20,20 +24,12 @@
 #    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 #----------------------------------------------------------------------
 #
-#  For information on how to use and install see ri-ruby.el
+#  For information on how to use and install see ri.el
 #
 
-# This script has been updated to work with RDoc 2, which comes with
+# This script has been updated to work with RDoc 2.2, which comes with
 # Ruby 1.9 and is also available in gem form. If you are having
 # trouble with it in Ruby 1.8, try installing the "rdoc" gem.
-
-# As of the 10th of September, RDoc 2.1.0 is the latest released
-# version, and there have been some required fixes since that
-# release. So if you're having trouble, try installing RDoc from
-# trunk:
-
-# $ svn co svn://rubyforge.org/var/svn/rdoc/trunk rdoc
-# $ cd rdoc && rake install_gem
 
 require 'rubygems'
 require 'rdoc/ri'
@@ -48,29 +44,29 @@ require 'rdoc/ri/display'
 module RDoc::RI
   class Emacs
     def initialize
-      @ri_reader = Reader.new(Cache.new(Paths.path(true, true, true, true)))
+      @reader = Reader.new(Cache.new(Paths.path(true, true, true, true)))
       @display = Display.new(Formatter.for("ansi"), 72, true)
     end
 
     def lookup_keyw(keyw)
       desc = NameDescriptor.new(keyw)
 
-      namespace = @ri_reader.top_level_namespace
+      namespace = @reader.top_level_namespace
       class_name = nil
       container = desc.class_names.inject(namespace) do |container, class_name|
-        namespace = @ri_reader.lookup_namespace_in(class_name, container)
+        namespace = @reader.lookup_namespace_in(class_name, container)
         namespace.find_all {|m| m.name == class_name}
       end
 
       if desc.method_name.nil?
         if [?., ?:, ?#].include? keyw[-1]
-          namespaces = @ri_reader.lookup_namespace_in("", container)
+          namespaces = @reader.lookup_namespace_in("", container)
           is_class_method = case keyw[-1]
                             when ?.: nil
                             when ?:: true
                             when ?#: false
                             end
-          methods = @ri_reader.find_methods("", is_class_method,
+          methods = @reader.find_methods("", is_class_method,
                                             container)
           return nil if methods.empty? && namespaces.empty?
         else
@@ -82,7 +78,7 @@ module RDoc::RI
       else
         return nil if container.empty?
         namespaces = []
-        methods = @ri_reader.
+        methods = @reader.
           find_methods(desc.method_name,
                        desc.is_class_method,
                        container).
@@ -94,7 +90,7 @@ module RDoc::RI
     end
 
     def completion_list(keyw)
-      return @ri_reader.full_class_names if keyw == ""
+      return @reader.full_class_names if keyw == ""
 
       desc, methods, namespaces = lookup_keyw(keyw)
       return nil unless desc
@@ -159,12 +155,12 @@ module RDoc::RI
       if desc.method_name
         methods = methods.find_all { |m| m.name == desc.method_name }
         return false if methods.empty?
-        meth = @ri_reader.get_method(methods[0])
+        meth = @reader.get_method(methods[0])
         @display.display_method_info(meth)
       else
         namespaces = namespaces.find_all { |n| n.full_name == desc.full_class_name }
         return false if namespaces.empty?
-        klass = @ri_reader.get_class(namespaces[0])
+        klass = @reader.get_class(namespaces[0])
         @display.display_class_info(klass)
       end
 
@@ -178,7 +174,7 @@ module RDoc::RI
       methods = methods.find_all { |m| m.name == desc.method_name }
       return false if methods.empty?
       methods.each do |m|
-        meth = @ri_reader.get_method(m)
+        meth = @reader.get_method(m)
         @display.full_params(meth)
       end
 
