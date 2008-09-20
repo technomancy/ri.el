@@ -49,7 +49,10 @@
 (defun ri-read-string ()
   (completing-read "Documentation for: " 'ri-complete nil t 'ri-history))
 
-(defun ri-complete (string predicate true)
+(defun ri-complete (string predicate true) )
+
+(defun ri-start-process ()
+  (start-process "ri" " *ri-output*" "ri_repl"))
 
 (defun ri-mode ()
   "Mode for viewing Ruby documentation."
