@@ -3,10 +3,15 @@
 ;; Copyright (C) 2008 Phil Hagelberg
 
 ;; Author: Phil Hagelberg
-;; Version: 0.1
+;; Version: 0.2
 ;; Keywords: tools, documentation
+;; Created: 2008-09-19
+;; URL: http://www.emacswiki.org/cgi-bin/wiki/RiEl
+;; EmacsWiki: RiEl
 
 ;; This file is NOT part of GNU Emacs.
+
+;;; License:
 
 ;; This program is free software: you can redistribute it and/or
 ;; modify it under the terms of the GNU General Public License as
@@ -23,11 +28,20 @@
 
 ;;; Commentary:
 
-;; ri.el provides an Emacs frontend to Ruby's `ri' documentation tool.
+;; ri.el provides an Emacs frontend to Ruby's `ri' documentation
+;; tool. It offers lookup and completion.
+
+;; It relies on the ruby script `ri_repl' being on the path, which
+;; should be found at http://p.hagelb.org/ri_repl
 
 ;;; TODO:
 
-;; * Hook up ri-read-string to ri_repl's disambiguate function.
+;; * Class methods only work with Class::method syntax, not Class.method
+;; * Keep input history
+;; * Documentation for completing-read is out of date, ask for
+;;   clarification on emacs-devel re: (boundaries . "")
+;; * Can we bundle the Ruby script *inside* the elisp and run it with
+;;   "ruby -e"? Is that even *sane*?
 ;; * Flex matching?
 
 ;;; Code:
@@ -35,28 +49,27 @@
 (defvar ri-mode-hook nil
   "Hooks to run when invoking ri-mode.")
 
-(defvar ri-separator "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"
-  "String used by ri_repl to indicate completion.")
-
 (defun ri (&optional ri-documented)
   "Look up Ruby documentation."
   (interactive)
   (setq ri-documented (or ri-documented (ri-read-string)))
-  (let ((ri-buffer (get-buffer-create (format "*ri `%s'*" ri-documented)))
+  (let ((ri-buffer (get-buffer-create (format "*ri %s*" ri-documented)))
         (ri-content (ri-get ri-documented)))
     (display-buffer ri-buffer)
     (with-current-buffer ri-buffer
-      (buffer-disable-undo)
       (erase-buffer)
       (insert ri-content)
       (goto-char (point-min))
       (ri-mode))))
 
 (defun ri-read-string ()
-  (read-from-minibuffer "Look up: "))
-;; (completing-read "Look up: " 'ri-complete)) ;; nil t))
+  (setq ri-catcher nil) ;; for debugging completion
+  (completing-read "Look up: " 'ri-complete nil t))
 
-(defun ri-complete (string predicate true) )
+(defun ri-complete (string predicate bounds)
+  (add-to-list 'ri-catcher (list string predicate bounds))
+  (if (eq t bounds)
+      (read (ri-get (concat "Complete: " string)))))
 
 (defun ri-get-process ()
   "Return the subprocess, starting it if necessary."
@@ -66,20 +79,15 @@
 (defun ri-get (ri-documented)
   "Returns the documentation for the class/module/method given."
   (with-current-buffer (process-buffer (ri-get-process))
-    (kill-region (point-min) (point-max))
+    (erase-buffer)
 
     (process-send-string (ri-get-process) (concat ri-documented "\n"))
-    (accept-process-output (ri-get-process) 3)
-
-    ;; Clean up
-    (goto-char (point-min))
-    (search-forward ri-separator)
-    (replace-match "")
-
+    (accept-process-output (ri-get-process) 3 0 t)
     (buffer-string)))
 
 (defun ri-mode ()
   "Mode for viewing Ruby documentation."
+  (buffer-disable-undo)
   (kill-all-local-variables)
   (local-set-key (kbd "q") 'quit-window)
   (local-set-key (kbd "RET") 'ri-follow)
@@ -88,12 +96,5 @@
   (setq buffer-read-only t)
   (run-hooks 'ri-mode-hook))
 
-(defun ri-buffer-contains-p (string)
-  (save-excursion
-    (goto-char (point-min))
-    (search-forward string nil t)))
-
 (provide 'ri)
 ;;; ri.el ends here
-
-(process-send-string (ri-get-process) "\n")

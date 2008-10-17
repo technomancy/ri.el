@@ -7,9 +7,7 @@ class TestRiRepl < Test::Unit::TestCase
   def test_complete_absolute_method
     # instance
     completions = RDoc::RI.complete_absolute_method "String#sc"
-    assert_at_least ["String#block_scanf", "String#scan", "String#scanf",
-                     "String#shellescape", "String#underscore",
-                     "String#escape_regexp", "String#unescape_regexp"], completions
+    assert_at_least ["String#scan", "String#scanf"], completions
     # class
     completions = RDoc::RI.complete_absolute_method "YAML::add"
     assert_at_least ['YAML::add_builtin_type',
@@ -17,7 +15,7 @@ class TestRiRepl < Test::Unit::TestCase
                      'YAML::add_ruby_type'], completions
                     
     # dotted
-    completions = RDoc::RI.complete_absolute_method "YAML.load"
+    completions = RDoc::RI.complete_absolute_method "YAML.loa"
     assert_at_least ['YAML::load',
                      'YAML::load_file',
                      'YAML::load_documents'], completions
@@ -37,6 +35,7 @@ class TestRiRepl < Test::Unit::TestCase
 
   private
   def assert_at_least(expected, actual)
-    assert (expected - actual).empty?, "Missing #{(expected - actual).inspect}."
+    assert((expected - actual).empty?,
+           "#{actual.inspect} is missing #{(expected - actual).inspect}.")
   end
 end

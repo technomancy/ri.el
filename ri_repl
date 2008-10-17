@@ -1,6 +1,7 @@
 #!/usr/bin/env ruby
 
-# ri_repl --- helper script for use with ri.el
+# ri_repl --- Completion/lookup script for use with ri.el
+# See http://www.emacswiki.org/cgi-bin/wiki/RiEl
 
 require 'rubygems'
 gem 'rdoc', '>= 2.2.1'
@@ -18,7 +19,6 @@ module RDoc
   module RI
     module_function
 
-    SEPARATOR = '%' * 40 # Something unique to watch for
     @driver = RI::Driver.new # Piggy-back on some of this functionality
 
     def repl(input = $stdin)
@@ -39,12 +39,11 @@ module RDoc
                  end
         
         STDOUT.puts output
-        STDOUT.puts SEPARATOR
       end
     end
 
     def complete(string)
-      targets = if string =~ /(#|::|\.)/
+      targets = if string =~ /(#|::[a-z]|\.[a-z])/
                   complete_absolute_method(string)
                 elsif string =~ /^[A-Z]/
                   complete_constant(string)
@@ -57,7 +56,7 @@ module RDoc
 
     def complete_absolute_method(string, methods = [])
       klass, method = @driver.parse_name(string)
-      pattern = /#{method}/
+      pattern = /^#{method}/
 
       class_cache[klass.to_s]["instance_methods"].map{|h|h["name"]}.grep(pattern) do |name|
         methods << klass + '#' + name
@@ -74,7 +73,7 @@ module RDoc
     end
 
     def complete_method_only(string, methods = [])
-      pattern = /#{string}/
+      pattern = /^#{string}/
       class_cache.keys.sort.each do |klass|
         class_cache[klass]["instance_methods"].map{|h|h["name"]}.grep(pattern) do |name|
           methods << klass + '#' + name if load_cache_for(klass)[klass+'#'+name]
