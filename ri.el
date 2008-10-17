@@ -25,14 +25,24 @@
 
 ;; ri.el provides an Emacs frontend to Ruby's `ri' documentation tool.
 
+;;; TODO:
+
+;; * Hook up ri-read-string to ri_repl's disambiguate function.
+;;   This will require differentiating input to ri_repl between lookup
+;;   requests and completion requests.
+
 ;;; Code:
 
 (defvar ri-mode-hook nil
   "Hooks to run when invoking ri-mode.")
 
-(defun ri (ri-documented)
+(defvar ri-separator "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"
+  "String used by ri_repl to indicate completion.")
+
+(defun ri (&optional ri-documented)
   "Look up Ruby documentation."
-  (interactive (ri-read-string))
+  (interactive)
+  (setq ri-documented (or ri-documented (ri-read-string)))
   (let ((ri-buffer (get-buffer-create (format "*ri `%s'*" ri-documented)))
         (ri-content (ri-get ri-documented)))
     (display-buffer ri-buffer)
@@ -44,28 +54,30 @@
       (ri-mode))))
 
 (defun ri-read-string ()
-  (completing-read "Documentation for: " 'ri-complete)) ;; nil t))
+  (read-from-minibuffer "Look up: "))
+;; (completing-read "Look up: " 'ri-complete)) ;; nil t))
 
 (defun ri-complete (string predicate true) )
 
 (defun ri-get-process ()
   "Return the subprocess, starting it if necessary."
-  (or (get-process "ri")
-      (start-process "ri" " *ri-output*" "ri_repl")))
+  (or (get-process "ri-repl")
+      (start-process "ri-repl" " *ri-output*" "ri_repl")))
 
 (defun ri-get (ri-documented)
   "Returns the documentation for the class/module/method given."
-  (save-excursion
-    (switch-to-buffer (process-buffer (ri-get-process)))
+  (with-current-buffer (process-buffer (ri-get-process))
     (kill-region (point-min) (point-max))
-    (process-send-string (ri-get-process)
-                         (format "DISPLAY_INFO %s" ri-documented))
-    (while (not (buffer-contains-p "RI_EMACS_END_OF_INFO"))
-      (sleep-for 0.05))
-    (search-backward "\nRI_EMACS_END_OF_INFO")
+
+    (process-send-string (ri-get-process) (concat ri-documented "\n"))
+    (accept-process-output (ri-get-process) 3)
+
+    ;; Clean up
+    (goto-char (point-min))
+    (search-forward ri-separator)
     (replace-match "")
+
     (buffer-string)))
-    
 
 (defun ri-mode ()
   "Mode for viewing Ruby documentation."
@@ -77,5 +89,12 @@
   (setq buffer-read-only t)
   (run-hooks 'ri-mode-hook))
 
+(defun ri-buffer-contains-p (string)
+  (save-excursion
+    (goto-char (point-min))
+    (search-forward string nil t)))
+
 (provide 'ri)
 ;;; ri.el ends here
+
+(process-send-string (ri-get-process) "\n")

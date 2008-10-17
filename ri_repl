@@ -19,7 +19,6 @@ module RDoc
     SEPARATOR = '%' * 40 # Something unique to watch for
 
     def self.repl(input = $stdin)
-      print 'RI> '
       loop do
         $stdout = StringIO.new
 
@@ -33,14 +32,14 @@ module RDoc
 
     def self.parse(output)
       if output =~ /^     More than one method matched your request/
-        disambiguate output
+        completions output
       else
         output
       end
     end
 
     # Return a Lisp list of all the choices
-    def self.disambiguate(output)
+    def self.completions(output)
       lines = output.split("\n")[3 .. -1]
       ['(', lines.map{ |l| "\"#{l.gsub(/ .*/, '')}\"" }, ')']
     end
