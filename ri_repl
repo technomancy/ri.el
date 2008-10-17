@@ -16,33 +16,78 @@ end
 
 module RDoc
   module RI
-    SEPARATOR = '%' * 40 # Something unique to watch for
+    module_function
 
-    def self.repl(input = $stdin)
+    SEPARATOR = '%' * 40 # Something unique to watch for
+    @driver = RI::Driver.new # Piggy-back on some of this functionality
+
+    def repl(input = $stdin)
       loop do
         $stdout = StringIO.new
 
-        Driver.run [input.gets.chomp]
-        $stdout.rewind
-
-        STDOUT.puts parse($stdout.read)
+        string = input.gets.chomp
+        output = if string =~ /^Complete: (.+)$/
+                   complete(Regexp.last_match[1])
+                 else
+                   begin
+                     Driver.run [string]
+                     $stdout.rewind
+                     $stdout.read
+                   rescue => e
+                     e.message
+                   end
+                 end
+        
+        STDOUT.puts output
         STDOUT.puts SEPARATOR
       end
     end
 
-    def self.parse(output)
-      if output =~ /^     More than one method matched your request/
-        completions output
-      else
-        output
-      end
+    def complete(string)
+      targets = if string =~ /(#|::|\.)/
+                  complete_absolute_method(string)
+                elsif string =~ /^[A-Z]/
+                  complete_constant(string)
+                else
+                  complete_method_only(string)
+                end
+
+      '(' + targets.map{ |m| "\"#{m}\"" }.join(' ') + ')'
     end
 
-    # Return a Lisp list of all the choices
-    def self.completions(output)
-      lines = output.split("\n")[3 .. -1]
-      ['(', lines.map{ |l| "\"#{l.gsub(/ .*/, '')}\"" }, ')']
+    def complete_absolute_method(string, methods = [])
+      klass, method = @driver.parse_name(string)
+      pattern = /#{method}/
+
+      class_cache[klass.to_s]["instance_methods"].map{|h|h["name"]}.grep(pattern) do |name|
+        methods << klass + '#' + name
+      end
+      class_cache[klass.to_s]["class_methods"].map{|h|h["name"]}.grep(pattern) do |name|
+        methods << klass + '::' + name 
+      end
+      return methods
     end
+
+    def complete_constant(string)
+      pattern = /^#{string}/
+      class_cache.keys.grep(pattern)
+    end
+
+    def complete_method_only(string, methods = [])
+      pattern = /#{string}/
+      class_cache.keys.sort.each do |klass|
+        class_cache[klass]["instance_methods"].map{|h|h["name"]}.grep(pattern) do |name|
+          methods << klass + '#' + name if load_cache_for(klass)[klass+'#'+name]
+        end
+        class_cache[klass]["class_methods"].map{|h|h["name"]}.grep(pattern) do |name|
+          methods << klass + '::' + name  if load_cache_for(klass)[klass+'::'+name]
+        end
+      end
+      return methods
+    end
+
+    def class_cache; @driver.class_cache end
+    def load_cache_for(klassname); @driver.load_cache_for(klassname) end
   end
 end
 

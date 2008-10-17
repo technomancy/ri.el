@@ -28,8 +28,7 @@
 ;;; TODO:
 
 ;; * Hook up ri-read-string to ri_repl's disambiguate function.
-;;   This will require differentiating input to ri_repl between lookup
-;;   requests and completion requests.
+;; * Flex matching?
 
 ;;; Code:
 
