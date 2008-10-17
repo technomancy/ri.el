@@ -30,14 +30,11 @@
 (defvar ri-mode-hook nil
   "Hooks to run when invoking ri-mode.")
 
-(defvar ri-history nil
-  "History of previously invoked lookups")
-
 (defun ri (ri-documented)
   "Look up Ruby documentation."
   (interactive (ri-read-string))
   (let ((ri-buffer (get-buffer-create (format "*ri `%s'*" ri-documented)))
-        (ri-content (ri-lookup ri-documented)))
+        (ri-content (ri-get ri-documented)))
     (display-buffer ri-buffer)
     (with-current-buffer ri-buffer
       (buffer-disable-undo)
@@ -47,12 +44,28 @@
       (ri-mode))))
 
 (defun ri-read-string ()
-  (completing-read "Documentation for: " 'ri-complete nil t 'ri-history))
+  (completing-read "Documentation for: " 'ri-complete)) ;; nil t))
 
 (defun ri-complete (string predicate true) )
 
-(defun ri-start-process ()
-  (start-process "ri" " *ri-output*" "ri_repl"))
+(defun ri-get-process ()
+  "Return the subprocess, starting it if necessary."
+  (or (get-process "ri")
+      (start-process "ri" " *ri-output*" "ri_repl")))
+
+(defun ri-get (ri-documented)
+  "Returns the documentation for the class/module/method given."
+  (save-excursion
+    (switch-to-buffer (process-buffer (ri-get-process)))
+    (kill-region (point-min) (point-max))
+    (process-send-string (ri-get-process)
+                         (format "DISPLAY_INFO %s" ri-documented))
+    (while (not (buffer-contains-p "RI_EMACS_END_OF_INFO"))
+      (sleep-for 0.05))
+    (search-backward "\nRI_EMACS_END_OF_INFO")
+    (replace-match "")
+    (buffer-string)))
+    
 
 (defun ri-mode ()
   "Mode for viewing Ruby documentation."
