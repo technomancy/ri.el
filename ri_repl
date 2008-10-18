@@ -6,17 +6,17 @@
 require 'rubygems'
 gem 'rdoc', '>= 2.2.1'
 
-require 'rdoc/ri'
 require 'rdoc/ri/driver'
 require 'stringio'
 
-class RDoc::RI::Driver
-  # We don't want to exit on not found
-  def abort(msg); warn msg end
-end
-
 module RDoc
   module RI
+
+    # We don't want to exit on not found
+    class Driver
+      def abort(msg); warn msg end
+    end
+
     module_function
 
     @driver = RI::Driver.new # Piggy-back on some of this functionality

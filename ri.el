@@ -37,6 +37,7 @@
 ;;; TODO:
 
 ;; * Class methods only work with Class::method syntax, not Class.method
+;; * Default to symbol-at-point
 ;; * Keep input history
 ;; * Documentation for completing-read is out of date, ask for
 ;;   clarification on emacs-devel re: (boundaries . "")
@@ -91,7 +92,7 @@
   (kill-all-local-variables)
   (local-set-key (kbd "q") 'quit-window)
   (local-set-key (kbd "RET") 'ri-follow)
-  (setq mode-name "RI")
+  (setq mode-name "ri")
   (setq major-mode 'ri-mode)
   (setq buffer-read-only t)
   (run-hooks 'ri-mode-hook))
