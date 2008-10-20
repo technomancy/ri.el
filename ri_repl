@@ -1,33 +1,28 @@
 #!/usr/bin/env ruby
 
-# A REPL for RI.
-# Originally designed to work with ri.el: http://www.emacswiki.org/cgi-bin/wiki/RiEl
+# For use with ri.el: http://www.emacswiki.org/cgi-bin/wiki/RiEl
 
 require 'rubygems'
 gem 'rdoc', '>= 2.2.1'
 require 'rdoc/ri/driver'
 require 'stringio'
-require 'readline'
 
-module RDoc::RI::Repl
+module RDoc::RI
+  # Don't let the script die, even if there's an error.
+  class Driver; def abort(msg); warn msg end end
   @driver = Driver.new # Piggy-back on a built-in RI class
 
   module_function
 
-  Readline.completion_proc = lambda {|string| RDoc::RI.complete(string) }
-
-  def start(input = $stdin)
+  def repl(input = $stdin)
     loop do
-      if input.tty?
-        string = Readline.readline('RI: ') or exit 0
+      $stdout = StringIO.new
+      if((string = input.gets.chomp) =~ /^Complete: (.+)$/)
+        STDOUT.puts complete(Regexp.last_match[1])
       else
-        string = input.gets
-      end
-
-      if string =~ /^Complete: (.+)$/
-        puts complete(Regexp.last_match[1]).join("\n")
-      else
-        Driver.run [string.strip]
+        Driver.run [string]
+        $stdout.rewind
+        STDOUT.puts $stdout.read
       end
     end
   end
@@ -41,7 +36,7 @@ module RDoc::RI::Repl
       complete_constant(string)
     else # Just method (in any constant)
       complete_method_any_class(string)
-    end
+    end.join("\n")
   end
 
   def complete_absolute_method(string, methods = [])
@@ -87,4 +82,4 @@ module RDoc::RI::Repl
   def load_cache_for(k); @driver.load_cache_for(k) end
 end
 
-RDoc::RI::Repl.start if __FILE__ == $0
+RDoc::RI.repl if __FILE__ == $0
