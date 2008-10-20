@@ -17,7 +17,7 @@ module RDoc::RI
   def repl(input = $stdin)
     loop do
       $stdout = StringIO.new
-      if input.gets.chomp =~ /^Complete: (.+)$/
+      if((string = input.gets.chomp) =~ /^Complete: (.+)$/)
         STDOUT.puts complete(Regexp.last_match[1])
       else
         Driver.run [string]
@@ -34,7 +34,7 @@ module RDoc::RI
       cache.keys.grep(/^#{string}/)
     else
       complete_method_only(string)
-    end.target.join("\n")
+    end.join("\n")
   end
 
   def complete_absolute_method(string, methods = [])

@@ -59,7 +59,7 @@
   (interactive)
   (setq ri-documented (or ri-documented (ri-completing-read)))
   (let ((ri-buffer (get-buffer-create (format "*ri %s*" ri-documented)))
-        (ri-content (ri-query "lookup" ri-documented)))
+        (ri-content (ri-query ri-documented)))
     (display-buffer ri-buffer)
     (with-current-buffer ri-buffer
       (erase-buffer)
@@ -90,15 +90,18 @@
   ;; Populate ri-completions-alist if necessary
   (unless (assoc string ri-completions-alist)
     (add-to-list 'ri-completions-alist
-                 (split-string (ri-query (concat "Complete: " string)))))
+                 (cons string
+                       (split-string (ri-query (concat "Complete: " string))))))
   (cond ((eq t flag)
          (ri-all-completions string))
         ((eq nil flag)
          (ri-try-completion string))
         ((eq 'lambda flag)
          (ri-test-completion string))
-        ;; TODO: no idea what this option means
-        ((and (listp flag) (eq (car flag) 'boundaries)) nil)))
+        ((and (listp flag) (eq (car flag) 'boundaries))
+         ;; Going to treat boundaries like all-completions for now.
+         (ri-all-completions string))
+        (t (message "Unknown flag: %s" flag))))
 
 (defun ri-test-completion (string)
   "Return non-nil if STRING is a valid completion."
@@ -123,7 +126,7 @@
   "Passes the `command' to the `ri' subprocess."
   (with-current-buffer (process-buffer (ri-get-process))
     (erase-buffer)
-    (process-send-string (ri-get-process) string)
+    (process-send-string (ri-get-process) (concat string "\n"))
     (accept-process-output (ri-get-process) 3 0 t)
     (buffer-string)))
 
