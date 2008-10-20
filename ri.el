@@ -36,15 +36,14 @@
 
 ;;; TODO:
 
-;; * Class methods only work with Class::method syntax, not Class.method
-;; * Default to symbol-at-point
-;; * Keep input history
+;; * Hypertext-ish follows
+;; * Flex matching?
 ;; * Can we bundle the Ruby script *inside* the elisp and run it with
 ;;   "ruby -e"? Is that even *sane*?
-;; * Flex matching?
-;; * Error handling in ri_repl
 
 ;;; Code:
+
+(require 'thingatpt)
 
 ;; Borrow this functionality from ido.
 (unless (functionp 'ido-find-common-substring)
@@ -83,7 +82,7 @@
 (defun ri-completing-read ()
   "Read the name of a Ruby class, module, or method to look up."
   (let (ri-completions-alist) ;; Needs to be dynamically bound.
-    (completing-read "RI: " 'ri-complete nil t)))
+    (completing-read "RI: " 'ri-complete nil t (ri-symbol-at-point))))
 
 (defun ri-complete (string predicate flag)
   "Dispatch to the proper completion functions based on flag."
@@ -114,6 +113,13 @@
 (defun ri-try-completion (string)
   "Return common substring of all completions of STRING in RDoc."
   (ido-find-common-substring (ri-all-completions string) string))
+
+(defun ri-symbol-at-point ()
+  ;; TODO: make this smart about class/module at point
+  (let ((ri-symbol (symbol-at-point)))
+    (if ri-symbol
+        (symbol-name ri-symbol)
+      "")))
 
 ;;; Process Communication
 

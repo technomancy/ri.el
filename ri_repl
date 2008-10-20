@@ -28,29 +28,44 @@ module RDoc::RI
   end
 
   def complete(string)
-    if string =~ /(#|::[a-z]|\.[a-z])/
+    if string =~ /::$|\.$/ # Method or constant
+      complete_absolute_method(string) + complete_constant(string)
+    elsif string =~ /(#|::[a-z]|\.[a-z])/ # Method inside constant
       complete_absolute_method(string)
-    elsif string =~ /^[A-Z]/
-      cache.keys.grep(/^#{string}/)
-    else
-      complete_method_only(string)
+    elsif string =~ /^[A-Z]/ # Just constant
+      complete_constant(string)
+    else # Just method (in any constant)
+      complete_method_any_class(string)
     end.join("\n")
   end
 
   def complete_absolute_method(string, methods = [])
-    klass, method = @driver.parse_name(string)
-    pattern = /^#{method}/
+    if string =~ /(.+)(\#|\.|::)$/ # Special case for no method name
+      klass = Regexp.last_match[1] 
+      pattern = Regexp.new('.')
+    else
+      klass, method = @driver.parse_name(string)
+      pattern = Regexp.new(method)
+    end
+
+    separator = string =~ /\./ ? '.' : '::'
 
     cache[klass]["instance_methods"].map{|h|h["name"]}.grep(pattern) do |name|
       methods << klass + '#' + name
     end
-    cache[klass]["class_methods"].map{|h|h["name"]}.grep(pattern) do |name|
-      methods << klass + '::' + name
+    unless string =~ /#/
+      cache[klass]["class_methods"].map{|h|h["name"]}.grep(pattern) do |name|
+        methods << klass + separator + name
+      end
     end
     return methods
   end
 
-  def complete_method_only(string, methods = [])
+  def complete_constant(string)
+    cache.keys.grep(/^#{string}/)
+  end
+
+  def complete_method_any_class(string, methods = [])
     pattern = /^#{string}/
     cache.keys.sort.each do |klass|
       cache[klass]["instance_methods"].map{|h|h["name"]}.grep(pattern) do |name|
@@ -66,4 +81,5 @@ module RDoc::RI
   def cache; @driver.class_cache end
   def load_cache_for(k); @driver.load_cache_for(k) end
 end
+
 RDoc::RI.repl if __FILE__ == $0
