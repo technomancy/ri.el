@@ -3,7 +3,7 @@
 ;; Copyright (C) 2008 Phil Hagelberg
 
 ;; Author: Phil Hagelberg
-;; Version: 0.2
+;; Version: 0.3
 ;; Keywords: tools, documentation
 ;; Created: 2008-09-19
 ;; URL: http://www.emacswiki.org/cgi-bin/wiki/RiEl
