@@ -39,52 +39,33 @@
 ;; * Class methods only work with Class::method syntax, not Class.method
 ;; * Default to symbol-at-point
 ;; * Keep input history
-;; * Documentation for completing-read is out of date, ask for
-;;   clarification on emacs-devel re: (boundaries . "")
 ;; * Can we bundle the Ruby script *inside* the elisp and run it with
 ;;   "ruby -e"? Is that even *sane*?
 ;; * Flex matching?
+;; * Error handling in ri_repl
 
 ;;; Code:
+
+;; Borrow this functionality from ido.
+(unless (functionp 'ido-find-common-substring)
+  (require 'ido))
 
 (defvar ri-mode-hook nil
   "Hooks to run when invoking ri-mode.")
 
+;;;###autoload
 (defun ri (&optional ri-documented)
   "Look up Ruby documentation."
   (interactive)
-  (setq ri-documented (or ri-documented (ri-read-string)))
+  (setq ri-documented (or ri-documented (ri-completing-read)))
   (let ((ri-buffer (get-buffer-create (format "*ri %s*" ri-documented)))
-        (ri-content (ri-get ri-documented)))
+        (ri-content (ri-query "lookup" ri-documented)))
     (display-buffer ri-buffer)
     (with-current-buffer ri-buffer
       (erase-buffer)
       (insert ri-content)
       (goto-char (point-min))
       (ri-mode))))
-
-(defun ri-read-string ()
-  (setq ri-catcher nil) ;; for debugging completion
-  (completing-read "Look up: " 'ri-complete nil t))
-
-(defun ri-complete (string predicate bounds)
-  (add-to-list 'ri-catcher (list string predicate bounds))
-  (if (eq t bounds)
-      (read (ri-get (concat "Complete: " string)))))
-
-(defun ri-get-process ()
-  "Return the subprocess, starting it if necessary."
-  (or (get-process "ri-repl")
-      (start-process "ri-repl" " *ri-output*" "ri_repl")))
-
-(defun ri-get (ri-documented)
-  "Returns the documentation for the class/module/method given."
-  (with-current-buffer (process-buffer (ri-get-process))
-    (erase-buffer)
-
-    (process-send-string (ri-get-process) (concat ri-documented "\n"))
-    (accept-process-output (ri-get-process) 3 0 t)
-    (buffer-string)))
 
 (defun ri-mode ()
   "Mode for viewing Ruby documentation."
@@ -96,6 +77,55 @@
   (setq major-mode 'ri-mode)
   (setq buffer-read-only t)
   (run-hooks 'ri-mode-hook))
+
+;;; Completion
+
+(defun ri-completing-read ()
+  "Read the name of a Ruby class, module, or method to look up."
+  (let (ri-completions-alist) ;; Needs to be dynamically bound.
+    (completing-read "RI: " 'ri-complete nil t)))
+
+(defun ri-complete (string predicate flag)
+  "Dispatch to the proper completion functions based on flag."
+  ;; Populate ri-completions-alist if necessary
+  (unless (assoc string ri-completions-alist)
+    (add-to-list 'ri-completions-alist
+                 (split-string (ri-query (concat "Complete: " string)))))
+  (cond ((eq t flag)
+         (ri-all-completions string))
+        ((eq nil flag)
+         (ri-try-completion string))
+        ((eq 'lambda flag)
+         (ri-test-completion string))
+        ;; TODO: no idea what this option means
+        ((and (listp flag) (eq (car flag) 'boundaries)) nil)))
+
+(defun ri-test-completion (string)
+  "Return non-nil if STRING is a valid completion."
+  (assoc string ri-completions-alist))
+
+(defun ri-all-completions (string)
+  "Search for partial matches to STRING in RDoc."
+  (cdr (assoc string ri-completions-alist)))
+
+(defun ri-try-completion (string)
+  "Return common substring of all completions of STRING in RDoc."
+  (ido-find-common-substring (ri-all-completions string) string))
+
+;;; Process Communication
+
+(defun ri-get-process ()
+  "Return the subprocess, starting it if necessary."
+  (or (get-process "ri-repl")
+      (start-process "ri-repl" " *ri-output*" "ri_repl")))
+
+(defun ri-query (string)
+  "Passes the `command' to the `ri' subprocess."
+  (with-current-buffer (process-buffer (ri-get-process))
+    (erase-buffer)
+    (process-send-string (ri-get-process) string)
+    (accept-process-output (ri-get-process) 3 0 t)
+    (buffer-string)))
 
 (provide 'ri)
 ;;; ri.el ends here

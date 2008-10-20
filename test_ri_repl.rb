@@ -27,10 +27,10 @@ class TestRiRepl < Test::Unit::TestCase
   end
 
   def test_complete_method_only
-    completions = RDoc::RI.complete_method_only "under"
-    assert_at_least ['ActiveSupport::CoreExtensions::String::Inflections#underscore',
-                     'ActiveSupport::Inflector#underscore',
-                     'String#underscore'], completions
+    completions = RDoc::RI.complete_method_only "execu"
+    assert_at_least ['File::executable?',
+                     'Pathname#executable?',
+                     'IRB::ExtendCommand::Jobs#execute'], completions
   end
 
   private
