@@ -2,7 +2,7 @@
 
 ;; Copyright (C) 2008 Phil Hagelberg
 
-;; Author: Phil Hagelberg
+;; Author: Phil Hagelberg <technomancy@gmail.com>
 ;; Version: 0.3
 ;; Keywords: tools, documentation
 ;; Created: 2008-09-19
@@ -30,16 +30,16 @@
 
 ;; ri.el provides an Emacs frontend to Ruby's `ri' documentation
 ;; tool. It offers lookup and completion.
-
-;; It relies on the ruby script `ri_repl' being on the path, which
-;; should be found at http://p.hagelb.org/ri_repl
+;;
+;; It's designed to work with RDoc 2.2.2, but if you only have RDoc
+;; 2.2.1 installed, you can download a helper script; see the
+;; docstring for `ri-repl-executable' for details.
 
 ;;; TODO:
 
-;; * Hypertext-ish follows
+;; * Hyperlinked ri-follow command
+;; * Font Lock
 ;; * Flex matching?
-;; * Can we bundle the Ruby script *inside* the elisp and run it with
-;;   "ruby -e"? Is that even *sane*?
 
 ;;; Code:
 
@@ -52,19 +52,29 @@
 (defvar ri-mode-hook nil
   "Hooks to run when invoking ri-mode.")
 
+(defvar ri-repl-executable "ri --repl"
+  "Executable to use to perform RI lookups.
+
+If RDoc 2.2.2 or greater is installed, this library should be
+able to use the `ri --repl' command as provided by that gem. If
+for some reason that is unavailable, download the ri_repl script
+from http://p.hagelb.org/ri_repl instead.")
+
 ;;;###autoload
 (defun ri (&optional ri-documented)
   "Look up Ruby documentation."
   (interactive)
   (setq ri-documented (or ri-documented (ri-completing-read)))
-  (let ((ri-buffer (get-buffer-create (format "*ri %s*" ri-documented)))
-        (ri-content (ri-query ri-documented)))
-    (display-buffer ri-buffer)
-    (with-current-buffer ri-buffer
-      (erase-buffer)
-      (insert ri-content)
-      (goto-char (point-min))
-      (ri-mode))))
+  (let ((ri-buffer-name (format "*ri %s*" ri-documented)))
+    (unless (get-buffer ri-buffer-name)
+      (let ((ri-buffer (get-buffer-create ri-buffer-name))
+            (ri-content (ri-query ri-documented)))
+        (display-buffer ri-buffer)
+        (with-current-buffer ri-buffer
+          (erase-buffer)
+          (insert ri-content)
+          (goto-char (point-min))
+          (ri-mode))))))
 
 (defun ri-mode ()
   "Mode for viewing Ruby documentation."
@@ -99,8 +109,7 @@
          (ri-test-completion string))
         ((and (listp flag) (eq (car flag) 'boundaries))
          ;; Going to treat boundaries like all-completions for now.
-         (ri-all-completions string))
-        (t (message "Unknown flag: %s" flag))))
+         (ri-all-completions string))))
 
 (defun ri-test-completion (string)
   "Return non-nil if STRING is a valid completion."
