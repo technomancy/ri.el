@@ -28,8 +28,15 @@
 ;; ri.el provides an Emacs frontend to Ruby's `ri' documentation
 ;; tool. It offers lookup and completion.
 
+;; This version will load all completion targets the first time it's
+;; invoked. This can be a significant startup time, but it will not
+;; have to look up anything after that point. It also has no external
+;; dependencies except for having `ri' on your path. If RDoc 2.x is
+;; not installed, it will fall back to ri 1.x.
+
 ;;; TODO:
 
+;; * Replace Const.method with Const::method on the fly
 ;; * Hyperlinked ri-follow command
 ;; * Font Lock
 ;; * Flex matching?
@@ -84,7 +91,11 @@
 
 (defun ri-names ()
   "One-liner to make RI spit out every class, module, and method name."
-  (split-string (shell-command-to-string "ruby -rubygems -e \"require 'rdoc/ri/reader'; require 'rdoc/ri/cache'; require 'rdoc/ri/paths'; puts RDoc::RI::Reader.new(RDoc::RI::Cache.new(RDoc::RI::Paths.path(true, true, true, true))).all_names.join(\\\"\n\\\")\"")))
+  (let ((ri-output (shell-command-to-string "ruby -rubygems -e \"require 'rdoc/ri/reader'; require 'rdoc/ri/cache'; require 'rdoc/ri/paths'; puts RDoc::RI::Reader.new(RDoc::RI::Cache.new(RDoc::RI::Paths.path(true, true, true, true))).all_names.join(\\\"\n\\\")\"")))
+    (split-string (if (string-match "no such file to load" ri-output)
+                      ;; Fall back to ri 1.x
+                      (shell-command-to-string "ri -l")
+                    ri-output))))
 
 (defun ri-symbol-at-point ()
   ;; TODO: make this smart about class/module at point
